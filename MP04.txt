@@ -1,0 +1,894 @@
+using namespace std;
+
+#include <iostream>
+#include <iomanip>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <cmath>
+
+void getData();
+void displayData();
+void Algorithm();
+void GanttChart();
+void displayTable();
+void init();
+void PriorityPreemptive();
+void SJFNonPreemptive();
+void RoundRobin();
+
+int numberOfProcess = 0;
+int elapsedTime = 0;
+int *arrivalTime;
+int *burstTime;
+int *priorityNumber;
+int *classification;
+int *turnAroundTime;
+int *waitingTime;
+int *waitTime;
+int *ascii;
+
+vector<string> finalProcess;
+vector<int> finalWaitingTime;
+vector<int> processIndexQue;
+
+string *process;
+
+int main()
+{
+	string choice;
+	bool success;
+
+	system("cls");
+
+	cout << "Programmed by: " << endl;
+	cout
+	\     << "MP04 - MULTILEVEL FEEDBACK QUEUE ALGORITHM" << endl << endl;
+
+	init();
+	getData();
+	displayData();
+	Algorithm();
+	GanttChart();
+	displayTable();
+
+	do{
+		cout << "\nDo you want to try again? [y/n] ";
+		cin >> choice;
+
+		if (choice == "y" || choice == "Y")
+			main();
+		else if (choice == "n" || choice == "N")
+			exit(0);
+		else{
+			cout << "\nInvalid choice!\n";
+			cin.ignore();
+			success = false;
+		}
+	}while(!success);
+}
+
+void init()
+{
+	//Ascii characters
+	ascii = new int[255];
+	for (int i = 0; i < 255; i++){
+		ascii[i] = i;
+	}
+}
+
+void getData()
+{
+	ifstream dataFile;
+	stringstream ss;
+	string line;
+	string *stringContainer;
+	int ctr = 0;
+
+	dataFile.open("MP04 Checker.txt");
+	if (dataFile.is_open())
+	{
+		while (getline(dataFile, line))
+		{
+			string number = "";
+			int index = 0;
+			switch (ctr)
+			{
+			case 0: //Number of process
+				ss << line;
+				ss >> numberOfProcess;
+				break;
+			case 1: //Arrival time
+				stringContainer = new string[line.length() + 1];
+				arrivalTime = new int[numberOfProcess];
+
+				for (int i = 0; i < line.length(); i++)
+				{
+					if (line[i] != ' ')
+						stringContainer[index] += line[i];
+					else
+						index++;
+				}
+				//Store to final int array
+				for (int i = 0; i < numberOfProcess; i++)
+				{
+					stringstream tempNum(stringContainer[i]);
+					tempNum >> arrivalTime[i];
+				}
+				break;
+			case 2: //Burst time
+				stringContainer = new string[line.length() + 1];
+				burstTime = new int[numberOfProcess];
+
+				for (int i = 0; i < line.length(); i++)
+				{
+					if (line[i] != ' ')
+						stringContainer[index] += line[i];
+					else
+						index++;
+				}
+
+				//Store to final int array
+				for (int i = 0; i < numberOfProcess; i++)
+				{
+					stringstream tempNum(stringContainer[i]);
+					tempNum >> burstTime[i];
+				}
+
+				break;
+			case 3: //Priority Number
+				stringContainer = new string[line.length() + 1];
+				priorityNumber = new int[numberOfProcess];
+
+				for (int i = 0; i < line.length(); i++)
+				{
+					if (line[i] != ' ')
+						stringContainer[index] += line[i];
+					else
+						index++;
+				}
+
+				//Store to final int array
+				for (int i = 0; i < numberOfProcess; i++)
+				{
+					stringstream tempNum(stringContainer[i]);
+					tempNum >> priorityNumber[i];
+				}
+				break;
+			case 4: //Priority Number
+				stringContainer = new string[line.length() + 1];
+				classification = new int[numberOfProcess];
+
+				for (int i = 0; i < line.length(); i++)
+				{
+					if (line[i] != ' ')
+						stringContainer[index] += line[i];
+					else
+						index++;
+				}
+
+				//Store to final int array
+				for (int i = 0; i < numberOfProcess; i++)
+				{
+					stringstream tempNum(stringContainer[i]);
+					tempNum >> classification[i];
+				}
+				break;
+			}
+			ctr++;
+		}
+	}
+	else{
+		cout << "MP04 Checker.txt does not exist! Please create MP03 Checker.txt within the same folder of the exe." << endl << endl;
+		system("pause");
+		main();
+	}
+
+	//Initialize process
+	process = new string[numberOfProcess];
+	for (int i = 0; i < numberOfProcess; i++){
+		stringstream ss;
+   	 	ss << i+1;
+    	string s=ss.str();
+		process[i] = "P" + ss.str();
+	}
+
+	dataFile.close();
+	
+}
+
+void displayData()
+{
+	string algoChoices[6] = { "FCS", "SJF-P", "SJF-NP", "P-P", "P-NP", "RR" };
+
+	cout << "Number of processes: " << numberOfProcess << endl;
+	cout << "Arrival time: " << endl;
+	for (int i = 0; i < numberOfProcess; i++){
+		cout << "P" << i + 1 << ": " << arrivalTime[i] << endl;
+	}
+
+	cout << "\nBurst time: " << endl;
+	for (int i = 0; i < numberOfProcess; i++){
+		cout << "P" << i + 1 << ": " << burstTime[i] << endl;
+	}
+
+	cout << "\nPriority Number: " << endl;
+	for (int i = 0; i < numberOfProcess; i++){
+		cout << "P" << i + 1 << ": " << priorityNumber[i] << endl;
+	}
+
+	cout << "\nClassification(1-FP / 2-BP): " << endl;
+	for (int i = 0; i < numberOfProcess; i++){
+		cout << "P" << i + 1 << ": " << classification[i] << endl;
+	}
+	cout << "\nAlgorithm Choices: " << endl;
+	for (int i = 0; i < 6; i++){
+		cout << i + 1 << ". " << algoChoices[i] << endl;
+	}
+}
+
+void Algorithm()
+{
+	int processIndex = 0;
+	elapsedTime = 0;
+
+	//Record the first arival
+	finalWaitingTime.push_back(0);
+
+	//Queue 1
+	RoundRobin();
+	//Queue 2
+	PriorityPreemptive();
+	//Queue 3
+	SJFNonPreemptive();
+}
+
+void RoundRobin()
+{
+	int quantum = 2;
+	int processIndex = 0;
+	vector<int> RRqueue;
+
+	//Get all queues based o arrival time
+	for (int i = 0; i < numberOfProcess; i++){
+		if (elapsedTime == arrivalTime[i])
+			RRqueue.push_back(i);
+	}
+
+	//Set the process based on priority
+	for (int i = 0; i < RRqueue.size(); i++){
+		if (priorityNumber[processIndex] > priorityNumber[RRqueue[i]])
+			processIndex = RRqueue[i];
+	}
+
+	while (true)
+	{
+		//Deduct burst time
+		burstTime[processIndex]--;
+		elapsedTime++;
+		quantum--;
+
+		
+
+		if (quantum == 0){
+			//Record
+			finalProcess.push_back(process[processIndex]);
+			finalWaitingTime.push_back(elapsedTime);
+
+			//Check if there are remaining burst time
+			if (burstTime[processIndex] > 0)
+				processIndexQue.push_back(processIndex); //Store to next queue
+
+			//Remove current process
+			for (int i = 0; i < RRqueue.size(); i++){
+				if (process[processIndex] == process[RRqueue[i]]){
+					RRqueue.erase(RRqueue.begin() + i);
+				}
+			}
+
+			//Go to second queue if there are no more process
+			if (RRqueue.size() <= 0)
+				break;
+
+			//Set the next process based on priority
+			processIndex = RRqueue[0];
+			for (int i = 0; i < RRqueue.size(); i++){
+				if (priorityNumber[processIndex] > priorityNumber[RRqueue[i]])
+					processIndex = RRqueue[i];
+			}
+
+			quantum = 2;
+		}
+	}
+}
+
+void PriorityPreemptive()
+{
+	int deductedBurstTime = 0;
+	int processIndex = 0;
+	vector<int> currentQueue = processIndexQue;
+	processIndexQue.clear();
+
+	//Get the highest priority
+	processIndex = currentQueue[0];
+	for (int i = 0; i < currentQueue.size(); i++){
+		if (priorityNumber[processIndex] > priorityNumber[currentQueue[i]])
+			processIndex = currentQueue[i];
+	}
+
+	while (true)
+	{
+		burstTime[processIndex]--;
+		elapsedTime++;
+
+		//Check for next queue
+		for (int i = 0; i < numberOfProcess; i++){
+			if (elapsedTime == arrivalTime[i]){
+				currentQueue.push_back(i);
+			}
+		}
+
+		//Check if new queue priority is less than current queue
+		for (int i = 0; i < currentQueue.size(); i++)
+		{
+			if (priorityNumber[processIndex] > priorityNumber[currentQueue[i]] && process[processIndex] != process[currentQueue[i]])
+			{
+				//Record
+				finalProcess.push_back(process[processIndex]);
+				finalWaitingTime.push_back(elapsedTime);
+
+				//Store index to next queue
+				processIndexQue.push_back(processIndex);
+
+				//Remove current index to current queue
+				for (int i = 0; i < currentQueue.size(); i++)
+				{
+					if (process[currentQueue[i]] == process[processIndex])
+					{
+						currentQueue.erase(currentQueue.begin() + i);
+					}
+				}
+
+				//Get the highest priority
+				processIndex = currentQueue[0];
+				for (int i = 0; i < currentQueue.size(); i++)
+				{
+					if (priorityNumber[processIndex] > priorityNumber[currentQueue[i]])
+						processIndex = currentQueue[i];
+				}
+				break;
+			}
+		}
+
+		//Find highest priority if done processing
+		if (burstTime[processIndex] == 0)
+		{
+			//Record
+			finalProcess.push_back(process[processIndex]);
+			finalWaitingTime.push_back(elapsedTime);
+
+			//Remove current index to current queue
+			for (int i = 0; i < currentQueue.size(); i++){
+				if (process[currentQueue[i]] == process[processIndex]){
+					currentQueue.erase(currentQueue.begin() + i);
+				}
+			}
+
+			//Check if done processing
+			if (currentQueue.size() <= 0)
+				break;
+
+			processIndex = currentQueue[0];
+
+			//Get the new process
+			for (int i = 0; i < currentQueue.size(); i++){
+				if (priorityNumber[processIndex] > priorityNumber[currentQueue[i]])
+					processIndex = currentQueue[i];
+			}
+		}
+	}
+
+}
+
+void SJFNonPreemptive()
+{
+	bool processToExecute = false;
+	int processIndex = 0;
+	processIndexQue.clear();
+
+	//Get all process that has still burst time left
+	for (int i = 0; i < numberOfProcess; i++)
+	{
+		if (burstTime[i] > 0){
+			processIndexQue.push_back(i);
+			processIndex = i;
+
+			while (elapsedTime != arrivalTime[i] && !processToExecute)
+			{
+				elapsedTime++;
+			}
+
+			processToExecute = true;
+		}
+	}
+		
+	while (processToExecute)
+	{
+		burstTime[processIndex] -= 1;
+		elapsedTime++;
+
+		//Check for next queues
+		for (int i = 0; i < processIndexQue.size(); i++){
+			if (elapsedTime == arrivalTime[processIndexQue[i]])
+				processIndexQue.push_back(i);
+		}
+
+		//Check if process is done
+		if (burstTime[processIndex] <= 0)
+		{
+			if (burstTime[processIndex] >= 0){
+				//Add to final things
+				finalProcess.push_back(process[processIndex]);
+				finalWaitingTime.push_back(elapsedTime);
+			}
+
+			//Remove current index to current queue
+			for (int i = 0; i < processIndexQue.size(); i++){
+				if (process[processIndexQue[i]] == process[processIndex]){
+					processIndexQue.erase(processIndexQue.begin() + i);
+				}
+			}
+
+			//Check if there are no more process
+			if (processIndexQue.size() <= 0)
+				break;
+
+			//Check for next process
+			processIndex = processIndexQue[0];
+			for (int i = 0; i < processIndexQue.size(); i++){
+				if (burstTime[processIndex] > burstTime[processIndexQue[i]])
+					processIndex = processIndexQue[i];
+			}
+		}
+	}
+}
+
+void GanttChart()
+{
+
+	//GANTT CHART//
+	cout << "\nGANTT CHART \n\n";
+
+	//Top
+	for (int i = 0; i < finalProcess.size(); i++)
+	{
+		int temp;
+
+		if (i == 0)
+			temp = finalWaitingTime[i + 1];
+		else
+			temp = finalWaitingTime[i + 1] - finalWaitingTime[i];
+
+
+
+		for (int j = 0; j < temp; j++)
+		{
+			//Check if burstTime value is less than 2
+			if (temp == 1)
+				temp += 2;
+			else if (temp == 2)
+				temp += 1;
+
+			if (i == 0 && temp == 3)
+				temp++;
+
+			//Draw line
+			if (j == 0 && i == 0)
+				cout << (char)ascii[218]; //Top left corner line
+			else if (i == finalProcess.size() - 1 && j == temp - 1)
+				cout << (char)ascii[191]; //Top right corner line
+			else if (j == temp - 1)
+				cout << (char)ascii[194]; //Mid top line
+			else
+				cout << (char)ascii[196]; //Top line
+
+			if (j == 0)
+				temp++;
+		}
+	}
+
+	//Middle
+	cout << endl;
+	for (int i = 0; i < finalProcess.size(); i++)
+	{
+		int temp;
+
+		if (i == 0)
+			temp = finalWaitingTime[i + 1];
+		else
+			temp = finalWaitingTime[i + 1] - finalWaitingTime[i];
+
+		int temp1 = 0;
+		int temp2 = 0;
+		int totalWhiteSpace = 0;
+		int midPoint = 0;
+
+		//Set the first line
+		if (i == 0)
+			cout << (char)ascii[179];
+
+		//Check if burstTime value is less than 2
+		if (temp == 1)
+			temp += 2;
+		else if (temp == 2)
+			temp += 1;
+		else
+			temp - 1;
+
+		if (temp == 3)
+			midPoint = 0;
+		else
+			midPoint = temp / 2;
+
+		while (temp2 < midPoint - 1)
+		{
+			cout << " ";
+			temp2++;
+		}
+		cout << finalProcess[i];
+		if (temp == 3 || temp == 3 && i == 0)
+		{
+			temp2 = midPoint + 2;
+			while (temp2 < temp)
+			{
+				cout << " ";
+				temp2++;
+			}
+		}
+		else if (i == 0)
+		{
+			temp2 = midPoint + 1;
+			while (temp2 < temp - 1)
+			{
+				cout << " ";
+				temp2++;
+			}
+		}
+		else
+		{
+			temp2 = midPoint + 1;
+			while (temp2 < temp)
+			{
+				cout << " ";
+				temp2++;
+			}
+		}
+
+		cout << (char)ascii[179];
+
+	}
+
+	//Bottom
+	cout << endl;
+	for (int i = 0; i < finalProcess.size(); i++)
+	{
+		int temp;
+
+		if (i == 0)
+			temp = finalWaitingTime[i + 1];
+		else
+			temp = finalWaitingTime[i + 1] - finalWaitingTime[i];
+
+		for (int j = 0; j < temp; j++)
+		{
+			//Check if burstTime value is less than 2
+			if (temp == 1)
+				temp += 2;
+			else if (temp == 2)
+				temp += 1;
+
+			if (i == 0 && temp == 3)
+				temp++;
+
+			//Draw line
+			if (j == 0 && i == 0)
+				cout << (char)ascii[192]; //Bottom left corner line
+			else if (i == finalProcess.size() - 1 && j == temp - 1)
+				cout << (char)ascii[217]; //Bottom right corner line
+			else if (j == temp - 1)
+				cout << (char)ascii[193]; //Mid bottom line
+			else
+				cout << (char)ascii[196]; //Bottom line
+
+			if (j == 0)
+				temp++;
+		}
+	}
+	cout << endl;
+
+	//Wait Time
+	for (int i = 0; i < finalWaitingTime.size() - 1; i++)
+	{
+		int temp;
+
+		if (i == 0)
+			temp = finalWaitingTime[i + 1];
+		else
+			temp = finalWaitingTime[i + 1] - finalWaitingTime[i];
+
+		if (temp == 1)
+			temp += 2;
+		else if (temp == 2)
+			temp += 1;
+		if (i == 0)
+		{
+			cout << finalWaitingTime[i];
+			if (finalWaitingTime[i] >= 9)
+			{
+				while (temp - 1 > 1)
+				{
+					cout << " ";
+					temp--;
+				}
+				cout << finalWaitingTime[i + 1];
+			}
+			else
+			{
+				while (temp > 1)
+				{
+					cout << " ";
+					temp--;
+				}
+			}
+			cout << finalWaitingTime[i + 1];
+		}
+		else
+		{
+			if (finalWaitingTime[i] >= 9)
+			{
+				while (temp - 1 > 0)
+				{
+					cout << " ";
+					temp--;
+				}
+				cout << finalWaitingTime[i + 1];
+			}
+			else
+			{
+				while (temp > 0)
+				{
+					cout << " ";
+					temp--;
+				}
+				cout << finalWaitingTime[i + 1];
+			}
+		}
+	}
+	cout << endl;
+}
+
+void displayTable()
+{
+	bool border = false;
+	int totalTurnAroundTime = 0;
+	int totalWaitingTime = 0;
+	int index = 0;
+	double averageTurnAroundTime = 0;
+	double averageWaitingTime = 0;
+
+	turnAroundTime = new int[numberOfProcess];
+	waitingTime = new int[numberOfProcess];
+
+	//TurnAroundTime
+	for (int i = 0; i < numberOfProcess; i++)
+	{
+		for (int j = 0; j < finalProcess.size(); j++){
+			if (process[i] == finalProcess[j])
+				turnAroundTime[i] = finalWaitingTime[j + 1];
+		}
+		turnAroundTime[i] -= arrivalTime[i];
+	}
+
+	//WaitingTime
+	for (int i = 0; i < numberOfProcess; i++)
+	{
+		for (int j = 0; j < finalProcess.size(); j++){
+			if (process[i] == finalProcess[j])
+				waitingTime[i] = finalWaitingTime[j + 1];
+		}
+	}
+
+	//Get total and average
+	for (int i = 0; i < numberOfProcess; i++) //TurnAroundTime
+	{
+		totalTurnAroundTime += turnAroundTime[i];
+		averageTurnAroundTime = (double)totalTurnAroundTime / sizeof(turnAroundTime);
+	}
+
+	for (int i = 0; i < numberOfProcess; i++) //WaitingTime
+	{
+		totalWaitingTime += waitingTime[i];
+		averageWaitingTime = (double)totalWaitingTime / sizeof(waitingTime);
+	}
+
+	//12 20 14
+	cout << endl << "TABLE" << endl;
+	for (int i = 0; i < ((numberOfProcess + 3) * 2) + 1; i++) //column
+	{
+		if (i % 2 == 0)
+			border = false;
+		else
+			border = true;
+
+		for (int j = 0; j < 45; j++) //row
+		{
+			if (i == 0) //Most top line
+			{
+				if (j == 0)
+					cout << (char)ascii[218]; //Top left
+				else if (j == 44)
+					cout << (char)ascii[191]; //Top right
+				else if (j == 10 || j == 29)
+					cout << (char)ascii[194]; //Mid top
+				else
+					cout << (char)ascii[196]; //Top line
+			}
+			else if (!border && i > 0) //Middle borders
+			{
+				if (i + 1 != ((numberOfProcess + 3) * 2) + 1)
+				{
+					if (j == 0)
+						cout << (char)ascii[195]; //Mid left
+					else if (j == 44)
+						cout << (char)ascii[180]; //Mid right
+					else if (j == 10 || j == 29)
+						cout << (char)ascii[197]; //Mid
+					else
+						cout << (char)ascii[196]; //Top line
+				}
+				else
+				{
+					if (j == 0)
+						cout << (char)ascii[192]; //Bottom left
+					else if (j == 44)
+						cout << (char)ascii[217]; //Bottom right
+					else if (j == 10 || j == 29)
+						cout << (char)ascii[193]; //Bottom mid
+					else
+						cout << (char)ascii[196]; //Bottom line
+				}
+			}
+			else if (border && i == 1) //Middle with title
+			{
+				cout << (char)ascii[179] << " Process " << (char)ascii[179]
+					<< " Turn Around Time " << (char)ascii[179] << " Waiting Time " << (char)ascii[179];
+				break;
+			}
+			else if (border && i > 1) //Middle items
+			{
+				if (index < numberOfProcess)     //USE INDEX HERE!
+				{
+					stringstream ss1;
+   	 				ss1 << turnAroundTime[index];
+    				string s1=ss1.str();
+					int digitCountTurnAroundTime = ss1.str().length();
+					stringstream ss2;
+   	 				ss2 << waitingTime[index];
+    				string s2=ss2.str();
+					int digitCountWaitingTime = ss2.str().length() + digitCountTurnAroundTime;
+
+					if (digitCountTurnAroundTime == 1)
+						digitCountTurnAroundTime = 0;
+					else
+						digitCountTurnAroundTime -= 1;
+
+					if (digitCountWaitingTime == 1)
+						digitCountWaitingTime = 0;
+					else
+						digitCountWaitingTime -= 1;
+
+
+					if (j == 0) //First row data
+						cout << (char)ascii[179] << "   " << process[index] << "    " << (char)ascii[179];
+					else if (j == 10) //Second row data
+						cout << turnAroundTime[index];
+					else if (j == 26 - digitCountTurnAroundTime) //Third row data
+						cout << waitingTime[index];
+					else if (j == 19 - digitCountTurnAroundTime) //Line
+						cout << (char)ascii[179];
+					else if (j == 35 - digitCountWaitingTime) //Line
+					{
+						cout << (char)ascii[179];
+						index++;
+						break;
+					}
+					else
+						cout << " ";
+				}
+				else if (index == numberOfProcess) //TOTAL
+				{
+					stringstream ss1;
+   	 				ss1 << turnAroundTime[index];
+    				string s1=ss1.str();
+					int digitCountTurnAroundTime = ss1.str().length();
+					stringstream ss2;
+   	 				ss2 << waitingTime[index];
+    				string s2=ss2.str();
+					int digitCountWaitingTime = ss2.str().length() + digitCountTurnAroundTime;
+
+					if (digitCountTurnAroundTime == 1)
+						digitCountTurnAroundTime = 0;
+					else
+						digitCountTurnAroundTime -= 1;
+
+					if (digitCountWaitingTime == 1)
+						digitCountWaitingTime = 0;
+					else
+						digitCountWaitingTime -= 1;
+
+					if (j == 0) //First row data
+						cout << (char)ascii[179] << "  Total  " << (char)ascii[179];
+					else if (j == 10) //Second row data
+						cout << totalTurnAroundTime;
+					else if (j == 26 - digitCountTurnAroundTime) //Third row data
+						cout << totalWaitingTime;
+					else if (j == 19 - digitCountTurnAroundTime) //Line
+						cout << (char)ascii[179];
+					else if (j == 35 - digitCountWaitingTime) //Line
+					{
+						cout << (char)ascii[179];
+						index++;
+						break;
+					}
+					else
+						cout << " ";
+				}
+				else if (index == numberOfProcess + 1) //Average
+				{
+					stringstream ss;
+					stringstream ss1;
+					string temp1;
+					string temp2;
+					ss << fixed << setprecision(2) << averageTurnAroundTime;
+					temp1 = ss.str();
+					ss1 << fixed << setprecision(2) << averageWaitingTime;
+					temp2 = ss1.str();
+					int digitCountTurnAroundTime = temp1.length();
+					int digitCountWaitingTime = temp2.length() + digitCountTurnAroundTime;
+
+					if (digitCountTurnAroundTime == 1)
+						digitCountTurnAroundTime = 0;
+					else
+						digitCountTurnAroundTime -= 1;
+
+					if (digitCountWaitingTime == 1)
+						digitCountWaitingTime = 0;
+					else
+						digitCountWaitingTime -= 1;
+
+					if (j == 0) //First row data
+						cout << (char)ascii[179] << " Average " << (char)ascii[179];
+					else if (j == 9) //Second row data
+						cout << setprecision(2) << fixed << averageTurnAroundTime;
+					else if (j == 25 - digitCountTurnAroundTime) //Third row data
+						cout << setprecision(2) << fixed << averageWaitingTime;
+					else if (j == 19 - digitCountTurnAroundTime) //Line
+						cout << (char)ascii[179];
+					else if (j == 35 - digitCountWaitingTime) //Line
+					{
+						cout << (char)ascii[179];
+						index++;
+						break;
+					}
+					else
+						cout << " ";
+				}
+			}
+
+		}
+		cout << endl;
+	}
+}
